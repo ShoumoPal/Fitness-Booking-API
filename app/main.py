@@ -8,29 +8,26 @@ from pydantic import EmailStr
 from sqlalchemy.orm import Session
 from typing import List
 from app_logger import loggerUtil
+from database import getDB
 
 # Create tables in DB
 models.Base.metadata.create_all(bind=engine)
 
-# Get DB session
-def getDB():
-    db = LocalSession()
-    try:
-        yield db
-    finally:
-        db.close()
-
 app = FastAPI()
 
+# GET Classes endpoint
 @app.get('/classes', response_model=List[schemas.FitnessClassResponse])
 def get_classes(db : Session = Depends(getDB)):
     classes = db.query(models.FitnessClass).all()
 
-    if not classes:
-        raise HTTPException(status_code=400, detail='No classes ongoing...')
+    loggerUtil.info('Fetched all available classes from DB...')
     
+    if not classes or len(list(classes)) == 0:
+        raise HTTPException(status_code=400, detail='No classes found...')
+
     return classes
 
+# POST/Create booking endpoint
 @app.post('/book', response_model=schemas.BookingResponse)
 def bookslot(request : schemas.BookingRequest, db : Session = Depends(getDB)):
     cls = db.query(models.FitnessClass).filter(models.FitnessClass.id == request.class_id).first()
@@ -61,6 +58,7 @@ def bookslot(request : schemas.BookingRequest, db : Session = Depends(getDB)):
 
     return booking
 
+# GET booking endpoint for a particular email
 @app.get('/bookings', response_model=List[schemas.BookingResponse])
 def getbookings(email : EmailStr = Query(...), db : Session = Depends(getDB)):
     currBookings = db.query(models.Bookings).filter(models.Bookings.client_email == str(email))
@@ -70,6 +68,7 @@ def getbookings(email : EmailStr = Query(...), db : Session = Depends(getDB)):
 
     return currBookings
 
+# Incase all bookings are needed to be shown
 @app.get('/allbookings', response_model=List[schemas.BookingResponse])
 def getbookings(email : EmailStr = Query(...), db : Session = Depends(getDB)):
     currBookings = db.query(models.Bookings).all()
@@ -77,14 +76,11 @@ def getbookings(email : EmailStr = Query(...), db : Session = Depends(getDB)):
         raise HTTPException(status_code=400, detail='No bookings found...')
 
     return currBookings
+
+# Ollama LLM response bot 
 @app.get('/AI_GET')
 def get_llm_classes(db : Session = Depends(getDB)):
     bookings = db.query(models.Bookings).all()
     classes = db.query(models.FitnessClass).all()
     return get_llm_response(classes[:], bookings[:])
-    
-
-# @app.put('/askAI')
-# def ask_AI(question : str = Query(...)):
-#     return get_llm_answers(question)
     

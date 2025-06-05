@@ -1,3 +1,5 @@
+# Module for initial seed data. Can be modified to add other kinds of data
+
 import models
 from datetime import datetime, timedelta
 from database import LocalSession

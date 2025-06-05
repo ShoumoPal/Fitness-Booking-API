@@ -16,4 +16,12 @@ SQLITE_URL = os.getenv('SQLITE_URL')
 engine = create_engine(SQLITE_URL, connect_args={'check_same_thread' : False})
 LocalSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
+#DB generator
+def getDB():
+    db = LocalSession()
+    try:
+        yield db
+    finally:
+        db.close()
+
 Base = declarative_base()

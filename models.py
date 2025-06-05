@@ -1,20 +1,22 @@
-from pydantic import BaseModel, EmailStr
-from datetime import datetime
+# Module used to define DB models for storing data
 
-class FitnessClass(BaseModel):
-    id : int
-    name : str
-    date_time : datetime
-    instructor : str
-    available_slots : int
+from sqlalchemy import Column, Integer, String, DateTime
+from database import Base
 
-class BookingRequest(BaseModel):
-    class_id : int
-    client_name : str
-    client_email : EmailStr
+class FitnessClass(Base):
+    __tablename__ = 'fitness_classes'
 
-class BookingResponse(BaseModel):
-    class_id : int
-    client_name : str
-    client_email : EmailStr
-    booking_time : datetime
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String)
+    date_time = Column(DateTime)
+    instructor = Column(String)
+    available_slots = Column(Integer)
+
+class Bookings(Base):
+    __tablename__ = 'bookings'
+
+    id = Column(Integer, primary_key=True, index=True)
+    class_id = Column(Integer)
+    client_name = Column(String)
+    client_email = Column(String)
+    booking_time = Column(DateTime)

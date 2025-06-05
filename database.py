@@ -1,29 +1,19 @@
-import pytz
-from datetime import datetime
+# Module to initialize the database (SQLite)
 
-classes = [
-    {
-        'id' : 1,
-        'name' : 'Yoga',
-        'date_time' : pytz.timezone('Asia/Kolkata').localize(datetime(2025, 2, 2, 10, 20)),
-        'instructor' : 'Alice',
-        'available_slots' : 3
-    },
-    {
-        'id' : 2,
-        'name' : 'Zumba',
-        'date_time' : pytz.timezone('Asia/Kolkata').localize(datetime(2025, 2, 4, 11, 20)),
-        'instructor' : 'Chinu',
-        'available_slots' : 1
-    },
-    {
-        'id' : 3,
-        'name' : 'HIIT',
-        'date_time' : pytz.timezone('Asia/Kolkata').localize(datetime(2025, 2, 4, 9, 20)),
-        'instructor' : 'Binu',
-        'available_slots' : 2
-    }
-]
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+import os
 
-# For later
-bookings = []
+# Loading environment variables
+load_dotenv(override=True)
+
+# DB url
+SQLITE_URL = os.getenv('SQLITE_URL')
+
+# Initializing connection
+engine = create_engine(SQLITE_URL, connect_args={'check_same_thread' : False})
+LocalSession = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+
+Base = declarative_base()

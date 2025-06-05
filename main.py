@@ -1,54 +1,90 @@
-from fastapi import FastAPI, Query, HTTPException
-from database import classes, bookings
-from utils import convert_timezone
-from AI import get_llm_response, get_llm_answers
-from models import BookingRequest, BookingResponse
+from fastapi import Depends, FastAPI, Query, HTTPException
+from database import engine, LocalSession
+from AI import get_llm_response
+import models, schemas
 import pytz
 from datetime import datetime
 from pydantic import EmailStr
+from sqlalchemy.orm import Session
+from typing import List
+from app_logger import loggerUtil
+
+# Create tables in DB
+models.Base.metadata.create_all(bind=engine)
+
+# Get DB session
+def getDB():
+    db = LocalSession()
+    try:
+        yield db
+    finally:
+        db.close()
 
 app = FastAPI()
 
-@app.get('/classes')
-def get_classes():
+@app.get('/classes', response_model=List[schemas.FitnessClassResponse])
+def get_classes(db : Session = Depends(getDB)):
+    classes = db.query(models.FitnessClass).all()
+
+    if not classes:
+        raise HTTPException(status_code=400, detail='No classes ongoing...')
+    
     return classes
 
-@app.get('/AI_GET')
-def get_llm_classes():
-    return get_llm_response()
+@app.post('/book', response_model=schemas.BookingResponse)
+def bookslot(request : schemas.BookingRequest, db : Session = Depends(getDB)):
+    cls = db.query(models.FitnessClass).filter(models.FitnessClass.id == request.class_id).first()
 
-@app.put('/askAI')
-def ask_AI(question : str = Query(...)):
-    return get_llm_answers(question)
-
-@app.post('/book', response_model=BookingResponse)
-def bookslot(request : BookingRequest):
-    cls = next((c for c in classes if c['id'] == request.class_id), None)
+    loggerUtil.info(f'Booking attempt for class id : {request.class_id} by {request.client_name}')
 
     if not cls:
+        loggerUtil.info(f'Booking attempt failed for class id : {request.class_id} by {request.client_name}... Class not found..')
         raise HTTPException(status_code=400, detail='Class not found...')
 
-    if cls['available_slots'] <= 0:
+    if cls.available_slots <= 0:
+        loggerUtil.info(f'Booking attempt failed for class id : {request.class_id} by {request.client_name}... No slots available in {cls.name} class with id : {cls.id}..')
         raise HTTPException(status_code=400, detail='No slots available...')
 
-    booking = {
-        'class_id' : request.class_id,
-        'client_name' : request.client_name,
-        'client_email' : request.client_email,
-        'booking_time' : pytz.timezone('Asia/Kolkata').localize(datetime.now())
-    }
+    booking = models.Bookings(
+        class_id = request.class_id,
+        client_name = request.client_name,
+        client_email = request.client_email,
+        booking_time = pytz.timezone('Asia/Kolkata').localize(datetime.now())
+    )
 
-    bookings.append(booking)
-    cls['available_slots'] -= 1
+    cls.available_slots -= 1
 
-    return BookingResponse(**booking)
+    db.add(booking)
+    db.commit()
+    db.refresh(cls)
+    db.refresh(booking)
 
-@app.get('/bookings')
-def getbookings(email : EmailStr = Query(...)):
-    currBookings = [booking for booking in bookings if booking['client_email'] == email]
+    return booking
 
+@app.get('/bookings', response_model=List[schemas.BookingResponse])
+def getbookings(email : EmailStr = Query(...), db : Session = Depends(getDB)):
+    currBookings = db.query(models.Bookings).filter(models.Bookings.client_email == str(email))
+
+    if not currBookings or len(list(currBookings)) == 0:
+        raise HTTPException(status_code=400, detail='No bookings found...')
+
+    return currBookings
+
+@app.get('/allbookings', response_model=List[schemas.BookingResponse])
+def getbookings(email : EmailStr = Query(...), db : Session = Depends(getDB)):
+    currBookings = db.query(models.Bookings).all()
     if not currBookings:
         raise HTTPException(status_code=400, detail='No bookings found...')
 
     return currBookings
+@app.get('/AI_GET')
+def get_llm_classes(db : Session = Depends(getDB)):
+    bookings = db.query(models.Bookings).all()
+    classes = db.query(models.FitnessClass).all()
+    return get_llm_response(classes[:], bookings[:])
+    
+
+# @app.put('/askAI')
+# def ask_AI(question : str = Query(...)):
+#     return get_llm_answers(question)
     
